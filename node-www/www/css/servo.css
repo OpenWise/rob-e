@@ -1,0 +1,29 @@
+.servo-container {
+	text-align: center;
+	color: white;
+    border-radius: 4px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+	background: rgb(100, 100, 100);
+	width:120px;
+}
+.servo-data {
+	text-align: center;
+	color: white;
+    border-radius: 4px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+	background: rgb(50, 50, 50);
+	width:118px;
+}
+.servo-value {
+	position: relative;
+	text-align: center;
+	top: 3px;
+}
+.servo-direction {
+	text-align: center;
+	font-size: 50%;
+	color: white;
+    border-radius: 4px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+	background: rgb(223, 117, 20);
+}

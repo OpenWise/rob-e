@@ -1,0 +1,15 @@
+{
+    "serverPort": 8080,
+    "dbName": "robe.db",
+    "redisPort": 6379,
+    "redisHost": "127.0.0.1",
+    "redisOpt": {},
+    "redisChannel": "ROBE-INFO",
+    "console": {
+        "uncaughtExceptionCatch": true,
+        "consoleFilter": [],
+        "logToFile": false,
+        "logFilter": ["LOG", "DEBUG", "INFO"],
+        "colors": true
+    }
+}
