@@ -30,6 +30,10 @@
 #define PWM_SHOULDER 	6
 #define PWM_ELBOW 	    5
 
+#define BASE        0
+#define SHOULDER    1
+#define ELBOW       2
+
 #define NO  0
 #define YES 1
 
@@ -46,14 +50,23 @@
 #define COORDINATE  1
 #define SERVO       2
 
+#define SERVO_SPEED_LOW       0
+#define SERVO_SPEED_MIDDLE    1
+#define SERVO_SPEED_HIGH      2
+
 using namespace std;
 
-mraa_pwm_context robeServoList[3];
+typedef struct {
+    mraa_pwm_context pwmCtx;
+    int              currentAngle;
+} servo_context_t;
+
+servo_context_t  servoCtxList[3];
 
 void connectCallback(const redisAsyncContext *c, int status);
 void disconnectCallback(const redisAsyncContext *c, int status);
 void * redisSubscriber (void *);
-void setAngle (mraa_pwm_context pwm, uint16_t angle);
+void setAngle (servo_context_t& ctx, int angle, uint8_t speed);
 
 int             running     = NO;
 redisContext*   redisCtx    = NULL;
@@ -71,19 +84,26 @@ main (int argc, char **argv) {
     if (error) {
         exit(EXIT_FAILURE);
     }
-    
+
     mraa_init();
 	fprintf(stdout, "MRAA Version: %s\n", mraa_get_version());
     
-    robeServoList[0] = mraa_pwm_init (PWM_BASE);
-    robeServoList[1] = mraa_pwm_init (PWM_SHOULDER);
-    robeServoList[2] = mraa_pwm_init (PWM_ELBOW);
+    servoCtxList[BASE].pwmCtx           = mraa_pwm_init (PWM_BASE);
+    servoCtxList[BASE].currentAngle     = 90;
+    servoCtxList[SHOULDER].pwmCtx       = mraa_pwm_init (PWM_SHOULDER);
+    servoCtxList[SHOULDER].currentAngle = 90;
+    servoCtxList[ELBOW].pwmCtx          = mraa_pwm_init (PWM_ELBOW);
+    servoCtxList[ELBOW].currentAngle    = 90;
     
-    mraa_pwm_enable (robeServoList[0], ENABLE);
-	mraa_pwm_enable (robeServoList[1], ENABLE);
-    mraa_pwm_enable (robeServoList[2], ENABLE);
+    mraa_pwm_enable (servoCtxList[BASE].pwmCtx,     ENABLE);
+	mraa_pwm_enable (servoCtxList[SHOULDER].pwmCtx, ENABLE);
+    mraa_pwm_enable (servoCtxList[ELBOW].pwmCtx,    ENABLE);
     
     printf("Starting the listener... [SUCCESS]\n");
+
+    setAngle (servoCtxList[BASE],      servoCtxList[BASE].currentAngle,     SERVO_SPEED_LOW);
+    setAngle (servoCtxList[SHOULDER],  servoCtxList[SHOULDER].currentAngle, SERVO_SPEED_LOW);
+    setAngle (servoCtxList[ELBOW],     servoCtxList[ELBOW].currentAngle,    SERVO_SPEED_LOW);
 	
 	while (!running) {
         usleep (10);
@@ -127,7 +147,7 @@ void subCallback(redisAsyncContext *c, void *r, void *priv) {
                         if (servoID > 0) {
                             std::cout  	<< "SERVO ("
                                         << servoID - 1 << ", " << angle << ")\n";
-                            setAngle (robeServoList[servoID - 1], angle);
+                            setAngle (servoCtxList[servoID - 1], angle, SERVO_SPEED_LOW);
                         }
                     }
                     break;
@@ -172,9 +192,31 @@ redisSubscriber (void *) {
 }
 
 void
-setAngle (mraa_pwm_context pwm, uint16_t angle) {
+setAngle (servo_context_t& ctx, int angle, uint8_t speed) {
 	float notches = ((float)(MAX_PULSE_WIDTH - MIN_PULSE_WIDTH) / 180);
-	uint16_t width = notches * (float) angle + MIN_PULSE_WIDTH;
+    int16_t width = notches * (float) angle + MIN_PULSE_WIDTH;
 
-	mraa_pwm_pulsewidth_us (pwm, width);
+    switch (speed) {
+        case SERVO_SPEED_LOW:
+            mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
+        break;
+        case SERVO_SPEED_MIDDLE:
+            mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
+        break;
+        case SERVO_SPEED_HIGH:
+            mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
+        break;
+        default: { // TODO - Somehow to make the speed work
+            int delta = abs(angle - ctx.currentAngle);
+            int direction = (angle - ctx.currentAngle > 0) ? 1 : -1;
+
+            for (int i = 0; i < delta; i++) {
+                width = notches * (float) (ctx.currentAngle + direction) + MIN_PULSE_WIDTH;
+                mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
+                ctx.currentAngle += direction;
+                usleep (100000);
+            }
+        }
+        break;
+    }
 }
