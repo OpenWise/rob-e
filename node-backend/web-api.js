@@ -8,7 +8,8 @@ var db      = new SqliteAdapter(config.dbName);
 var redis   = new RedisAdapter(config.redisChannel, config.redisPort, config.redisHost, config.redisOpt);
 var app     = express();
 
-redis.on(config.sensorChannel, function(data, type) {
+redis.on ("DB", function (data) {
+    console.log("Save to DB triggered.");
 });
 
 //enable CORS
@@ -39,7 +40,7 @@ apiRouter.route('/set_position/:x/:y/:z/:p').get(function(req, res) {
 
 apiRouter.route('/set_servo_angle/:id/:angle').get(function(req, res) {
     var data = '{"handler":2,"id":' + req.param('id') + ',"angle":' + req.param('angle') + '}';
-    console.log(data);
+    // console.log(data);
     
     redis.Publish("ROBE-IN", data, function(err, info) {
         if (err) {
@@ -57,6 +58,7 @@ var msgID = 0;
 
 sseRouter.route('/servo/:id').get(function(req, res) {
     var sid = req.params.id;
+    var channel = config.sensorChannel;
     console.log("Received new listener for sensor id " + sid);
     req.socket.setTimeout(Infinity);
     
@@ -72,30 +74,18 @@ sseRouter.route('/servo/:id').get(function(req, res) {
         res.write("data: " + data);
         res.write("\n\n");
     }
-
-    redis.GetServoValue(sid, function(err, data) {
-        if (err) {
-            console.error(err.message);
-        } else {
-            if (data) {
-                console.log("Initial SSE value from REDIS: " + sid + " " + data);
-                var sensor = JSON.parse(data);
-                writeSSE(sensor.value);
-            } else {
-                console.log("Servo value not found in REDIS: " + sid);
-            }
-        }
-    });
     
-    var onServoValueUpdate = function(data) {
-        console.log("Received servo value event for id " + sid + ": " + data);
+    var onServoValueUpdate = function (data) {
+        console.log("Update client triggered.");
         writeSSE(data);
     }
-    
-    var subid = redis.on(sid, onServoValueUpdate);
+
+    console.log("Register for " + sid);
+    redis.on(sid, onServoValueUpdate);
     req.on("close", function() {
         redis.removeListener(sid, onServoValueUpdate);
     });
+    console.log("Done for " + sid);
 });
 
 var server = app.listen(config.serverPort, function() {

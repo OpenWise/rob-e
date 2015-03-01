@@ -61,16 +61,17 @@ typedef struct {
     int              currentAngle;
 } servo_context_t;
 
-servo_context_t  servoCtxList[3];
-
 void connectCallback(const redisAsyncContext *c, int status);
 void disconnectCallback(const redisAsyncContext *c, int status);
 void * redisSubscriber (void *);
 void setAngle (servo_context_t& ctx, int angle, uint8_t speed);
+void publish (redisContext* ctx, char* buffer);
+void servoMsgFactory (char* buffer, int id, int angle);
 
-int             running     = NO;
-redisContext*   redisCtx    = NULL;
-pthread_t       redisSubscriberThread;
+servo_context_t  servoCtxList[3];
+int              running     = NO;
+redisContext*    redisCtx    = NULL;
+pthread_t        redisSubscriberThread;
 
 int
 main (int argc, char **argv) {
@@ -148,6 +149,10 @@ void subCallback(redisAsyncContext *c, void *r, void *priv) {
                             std::cout  	<< "SERVO ("
                                         << servoID - 1 << ", " << angle << ")\n";
                             setAngle (servoCtxList[servoID - 1], angle, SERVO_SPEED_LOW);
+
+                            char msg[128];
+                            servoMsgFactory (msg, servoID, angle);
+                            publish (redisCtx, msg);
                         }
                     }
                     break;
@@ -219,4 +224,22 @@ setAngle (servo_context_t& ctx, int angle, uint8_t speed) {
         }
         break;
     }
+}
+
+void
+publish (redisContext* ctx, char* buffer) {
+    char message[256];
+    redisReply* reply = NULL;
+
+    sprintf (message, "PUBLISH MODULE-INFO %s", buffer);
+    reply = (redisReply *)redisCommand (ctx, message);
+    printf ("ERROR %d", reply->type);
+    freeReplyObject(reply);
+
+    printf ("%s\n", message);
+}
+
+void
+servoMsgFactory (char* buffer, int id, int angle) {
+    sprintf (buffer, "{\"type\":\"SERVO\",\"id\":\"%d\",\"angle\":\"%d\"}", id, angle);
 }

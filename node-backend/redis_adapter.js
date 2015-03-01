@@ -17,11 +17,13 @@ function RedisAdapter(redisChannel, port, host, options) {
     this.subscribe.subscribe(redisChannel);
     var self = this;
     this.subscribe.on("message", function(channel, message) {
+        console.log("[Channel] " + channel);
         switch (channel) {
             case redisChannel:
                 var data = JSON.parse(message);
-                
-                break;
+                self.emit ("DB", message);
+                self.emit (data.id, message);
+            break;
         }
     });
     console.info("REDIS ADAPTER: subscribed for channel " + redisChannel);

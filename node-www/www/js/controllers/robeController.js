@@ -32,16 +32,43 @@ angular.module('app').controller('robeController', function($scope, robeFactory,
 		yLane: 70,
     }
 
-    var eventSourceCallback = function(idx) {
-        
+    var eventBaseSourceCallback = function() {
+        return function (event) {
+            var msg = JSON.parse(event.data);
+            $scope.servoBase.angle = msg.angle;
+            $scope.$apply();
+        }
     }
+
+    var eventShoulderSourceCallback = function() {
+        return function (event) {
+            var msg = JSON.parse(event.data);
+            $scope.servoShoulder.angle = msg.angle;
+            $scope.$apply();
+        }
+    }
+
+    var eventElbowSourceCallback = function() {
+        return function (event) {
+            var msg = JSON.parse(event.data);
+            $scope.servoElbow.angle = msg.angle;
+            $scope.$apply();
+        }
+    }
+
+    var servoBaseSource             = new EventSource(serverService.server + "sse/servo/" + $scope.servoBase.id);
+    servoBaseSource.onmessage       = eventBaseSourceCallback();
+    var servoShoulderSource         = new EventSource(serverService.server + "sse/servo/" + $scope.servoShoulder.id);
+    servoShoulderSource.onmessage   = eventShoulderSourceCallback();
+    var servoElbowSource            = new EventSource(serverService.server + "sse/servo/" + $scope.servoElbow.id);
+    servoElbowSource.onmessage      = eventElbowSourceCallback();
 
     $scope.plusClick = function(servo) {
         if (servo.angle < 180) {
-            servo.angle += 5;
+            var newAngle = parseInt(servo.angle) + 5;
             robeFactory.rotateServo({
                 id: servo.id,
-                angle: servo.angle
+                angle: newAngle
             });
             // rotateServo($http, servo.id, servo.angle);
         }
@@ -49,15 +76,16 @@ angular.module('app').controller('robeController', function($scope, robeFactory,
 	
 	$scope.minusClick = function(servo) {
         if (servo.angle > 0) {
-            servo.angle -= 5;
+            var newAngle = parseInt(servo.angle) - 5;
             robeFactory.rotateServo({
                 id: servo.id,
-                angle: servo.angle
+                angle: newAngle
             });
             // rotateServo($http, servo.id, servo.angle);
         }
     }
     
+    // NOTE - Not for production, only for tests
     var rotateServo = function ($http, servoId, angle) {
         $http.get(serverService.server + 'api/set_servo_angle/' + servoId + '/' + angle).
         success(function(data, status, headers, config) {}).

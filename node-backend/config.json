@@ -4,7 +4,7 @@
     "redisPort": 6379,
     "redisHost": "127.0.0.1",
     "redisOpt": {},
-    "redisChannel": "ROBE-INFO",
+    "redisChannel": "MODULE-INFO",
     "console": {
         "uncaughtExceptionCatch": true,
         "consoleFilter": [],
