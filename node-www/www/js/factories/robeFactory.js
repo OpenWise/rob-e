@@ -14,7 +14,14 @@ angular.module('app').factory('robeFactory', function($resource, robeService, se
             method: "GET",
             interceptor: {
                 response: function(response) {
-                    // robeService.setValue(response.data);
+                    return response.data;
+                }
+            }
+        },
+        setArmPosition: {
+            method: "GET",
+            interceptor: {
+                response: function(response) {
                     return response.data;
                 }
             }

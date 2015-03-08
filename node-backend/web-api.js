@@ -35,13 +35,23 @@ apiRouter.route('/debug').get(function(req, res) {
 });
 
 apiRouter.route('/set_position/:x/:y/:z/:p').get(function(req, res) {
+    var data = '{"handler":1,"x":' + req.param('x') + 
+                           ',"y":' + req.param('y') + 
+                           ',"z":' + req.param('z') +
+                           ',"p":' + req.param('p') + '}';
+    redis.Publish("ROBE-IN", data, function(err, info) {
+        if (err) {
+            console.error("ERROR");
+            res.status(500).send(err.message);
+        } else {
+            console.error("GOOD");
+        }
+    });
     res.end('OK');
 });
 
 apiRouter.route('/set_servo_angle/:id/:angle').get(function(req, res) {
-    var data = '{"handler":2,"id":' + req.param('id') + ',"angle":' + req.param('angle') + '}';
-    // console.log(data);
-    
+    var data = '{"handler":2,"id":' + req.param('id') + ',"angle":' + req.param('angle') + '}';    
     redis.Publish("ROBE-IN", data, function(err, info) {
         if (err) {
             console.error("ERROR");

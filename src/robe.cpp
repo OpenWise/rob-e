@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <cstring>
+#include <cmath>
 
 #include "hiredis.h"
 #include "async.h"
@@ -27,12 +28,16 @@
 #include "mraa.h"
 
 #define PWM_BASE 	    3
-#define PWM_SHOULDER 	6
-#define PWM_ELBOW 	    5
+#define PWM_SHOULDER 	5
+#define PWM_ELBOW 	    6
+#define PWM_WHRIST      9
+#define PWM_GRIPPER     4
 
 #define BASE        0
 #define SHOULDER    1
 #define ELBOW       2
+#define WHRIST      3
+#define GRIPPER     4
 
 #define NO  0
 #define YES 1
@@ -61,14 +66,39 @@ typedef struct {
     int              currentAngle;
 } servo_context_t;
 
+typedef struct {
+    float x;
+    float y;
+    float z;
+    int   p;
+} coordinate_t;
+
+typedef struct {
+    float tn;
+    float j1;
+    float j2;
+    float j3;
+} arm_angles_t;
+
+typedef struct {
+    float           z_offset;
+    float           coxa;
+    float           fermur;
+    float           tibia;
+    coordinate_t    coord;
+    arm_angles_t    angles;
+} arm_context_t;
+
 void connectCallback(const redisAsyncContext *c, int status);
 void disconnectCallback(const redisAsyncContext *c, int status);
 void * redisSubscriber (void *);
 void setAngle (servo_context_t& ctx, int angle, uint8_t speed);
 void publish (redisContext* ctx, char* buffer);
 void servoMsgFactory (char* buffer, int id, int angle);
+uint8_t calculateAngles (arm_context_t& ctx);
 
-servo_context_t  servoCtxList[3];
+arm_context_t    robe;
+servo_context_t  servoCtxList[4];
 int              running     = NO;
 redisContext*    redisCtx    = NULL;
 pthread_t        redisSubscriberThread;
@@ -86,25 +116,35 @@ main (int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    robe.z_offset   = 5;
+    robe.coxa       = 4;
+    robe.fermur     = 5;
+    robe.tibia      = 1.5;
+
     mraa_init();
 	fprintf(stdout, "MRAA Version: %s\n", mraa_get_version());
     
     servoCtxList[BASE].pwmCtx           = mraa_pwm_init (PWM_BASE);
     servoCtxList[BASE].currentAngle     = 90;
     servoCtxList[SHOULDER].pwmCtx       = mraa_pwm_init (PWM_SHOULDER);
-    servoCtxList[SHOULDER].currentAngle = 90;
+    servoCtxList[SHOULDER].currentAngle = 50;
     servoCtxList[ELBOW].pwmCtx          = mraa_pwm_init (PWM_ELBOW);
-    servoCtxList[ELBOW].currentAngle    = 90;
+    servoCtxList[ELBOW].currentAngle    = 160;
+    servoCtxList[WHRIST].pwmCtx         = mraa_pwm_init (PWM_WHRIST);
+    servoCtxList[WHRIST].currentAngle   = 170;
+
     
     mraa_pwm_enable (servoCtxList[BASE].pwmCtx,     ENABLE);
 	mraa_pwm_enable (servoCtxList[SHOULDER].pwmCtx, ENABLE);
     mraa_pwm_enable (servoCtxList[ELBOW].pwmCtx,    ENABLE);
+    mraa_pwm_enable (servoCtxList[WHRIST].pwmCtx,    ENABLE);
     
     printf("Starting the listener... [SUCCESS]\n");
 
     setAngle (servoCtxList[BASE],      servoCtxList[BASE].currentAngle,     SERVO_SPEED_LOW);
     setAngle (servoCtxList[SHOULDER],  servoCtxList[SHOULDER].currentAngle, SERVO_SPEED_LOW);
     setAngle (servoCtxList[ELBOW],     servoCtxList[ELBOW].currentAngle,    SERVO_SPEED_LOW);
+    setAngle (servoCtxList[WHRIST],    servoCtxList[WHRIST].currentAngle,   SERVO_SPEED_LOW);
 	
 	while (!running) {
         usleep (10);
@@ -138,7 +178,18 @@ void subCallback(redisAsyncContext *c, void *r, void *priv) {
                         std::cout  	<< "COORDINATE ("
 							<< coordinateX << "," << coordinateY << "," 
                             << coordinateZ << "," << coordinateP << ")\n";
+
+                        robe.coord.x = coordinateX;
+                        robe.coord.y = coordinateY;
+                        robe.coord.z = coordinateZ;
+                        robe.coord.p = coordinateP;
+
                         // TODO - Inverse Kinematics
+                        if (calculateAngles (robe)) {
+                            std::cout   << "ANGLES ("
+                            << robe.angles.tn << "," << robe.angles.j1 << "," 
+                            << robe.angles.j2 << "," << robe.angles.j3 << ")\n";
+                        }
                     }
                     break;
                     case SERVO: {
@@ -242,4 +293,72 @@ publish (redisContext* ctx, char* buffer) {
 void
 servoMsgFactory (char* buffer, int id, int angle) {
     sprintf (buffer, "{\"type\":\"SERVO\",\"id\":\"%d\",\"angle\":\"%d\"}", id, angle);
+}
+
+uint8_t
+calculateAngles (arm_context_t& ctx) {
+    float a0, a1, a2, a3, a12, aG;
+    float wT, w1, w2, z1, z2, l12;
+    
+    a0 = atan(ctx.coord.y / ctx.coord.x);
+    wT = sqrt(ctx.coord.x*ctx.coord.x + ctx.coord.y*ctx.coord.y);
+    
+    aG = 0;
+    w2 = wT - ctx.tibia * cos(aG);
+    z2 = ctx.coord.z - ctx.tibia * sin(aG);
+    
+    l12 = sqrt((w2*w2) + (z2*z2));
+    a12 = atan (z2/w2);
+    
+    if (l12 > ctx.coxa + ctx.fermur) {
+        return NO;
+    }
+    
+    a1 = acos(((ctx.coxa*ctx.coxa) + (l12*l12) - (ctx.fermur*ctx.fermur)) / (2 * ctx.coxa * l12 )) + a12;
+    
+    w1 = ctx.coxa * cos(a1);
+    z1 = ctx.coxa * sin(a1);
+    a2 = atan ((z2 - z1) / (w2 - w1)) - a1;
+    a3 = aG - a1 - a2;
+    
+    ctx.angles.tn = a0 * 180 / 3.14;
+    ctx.angles.j1 = a1 * 180 / 3.14;
+    ctx.angles.j2 = a2 * 180 / 3.14;
+    ctx.angles.j3 = a3 * 180 / 3.14;
+
+    /*float xt    = ctx.coord.x;
+    float l     = sqrt (ctx.coord.x*ctx.coord.x + ctx.coord.y*ctx.coord.y);
+    float c     = 0;
+    float theta = 0;
+    float ang   = 0;
+    float x1    = 0;
+    float z1    = 0;
+    float d     = 0;
+
+    std::cout   << "COORDINATE_T ("
+                        << ctx.coord.x << "," << ctx.coord.y << "," 
+                        << ctx.coord.z << "," << ctx.coord.p << ")\n";
+
+    // tn angle
+    ctx.angles.tn = atan(ctx.coord.y / ctx.coord.x);
+
+    // j2 angle
+    ctx.coord.x = l;
+    ctx.coord.z += ctx.tibia;
+    c = sqrt (ctx.coord.x*ctx.coord.x + ctx.coord.z*ctx.coord.z);
+    ctx.angles.j2 = acos ((ctx.fermur*ctx.fermur + ctx.coxa*ctx.coxa - c*c) / (2 * ctx.fermur * ctx.coxa)) * 180 / 3.14;
+
+    // j1 angle
+    theta = acos ((c*c + ctx.coxa*ctx.coxa - ctx.fermur*ctx.fermur) / (2 * c * ctx.coxa));
+    ang = atan (ctx.coord.z / ctx.coord.x) + theta;
+    ctx.angles.j1 = (atan (ctx.coord.z / ctx.coord.x) + theta) * 180 / 3.14;
+
+    // j3 angle
+    x1 = ctx.coxa * cos (ang);
+    z1 = ctx.coxa * sin (ang);
+    d = sqrt ((ctx.coord.x - x1)*(ctx.coord.x - x1) + (ctx.coord.z - ctx.tibia - z1)*(ctx.coord.z - ctx.tibia - z1));
+    ctx.angles.j3 = acos ((ctx.fermur*ctx.fermur + ctx.tibia*ctx.tibia - d*d) / (2 * ctx.fermur * ctx.tibia)) * 180 / 3.14;
+    ctx.angles.tn = atan(ctx.coord.y / xt) * 180 / 3.14;*/
+
+    return YES;
 }

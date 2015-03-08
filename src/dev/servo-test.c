@@ -4,7 +4,7 @@
 #include <signal.h>
 #include "mraa.h"
 
-#define SERVO_BASE      5
+#define SERVO_BASE      9
 #define SERVO_SHOLDER   6
 #define SERVO_ELBOW     3
 
@@ -62,13 +62,13 @@ main () {
 
     while (isWorking == TRUE) {
         printf ("# Angle -> 0\n");
-        setAngle (pwmBase,      50);
+        setAngle (pwmBase,      0);
     	setAngle (pwmSholder,   80);
         setAngle (pwmElbow,     30);
     	usleep (2000000);
 
         printf ("# Angle -> 180\n");
-    	setAngle (pwmBase,      100);
+    	setAngle (pwmBase,      180);
     	setAngle (pwmSholder,   120);
         setAngle (pwmElbow,     100);
     	usleep (2000000);
