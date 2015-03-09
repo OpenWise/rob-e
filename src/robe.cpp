@@ -87,7 +87,40 @@ typedef struct {
     float           tibia;
     coordinate_t    coord;
     arm_angles_t    angles;
+    arm_angles_t*   angles_ptr;
 } arm_context_t;
+
+arm_angles_t angleMap[] = {
+    {  95.0, 100.0, 165.0, 135.0 },
+    { 100.0, 110.0, 140.0, 135.0 },
+    { 105.0, 125.0, 105.0, 135.0 },
+    { 130.0,  95.0, 165.0, 135.0 },
+    { 125.0, 110.0, 130.0, 135.0 },
+    { 120.0, 135.0,  85.0, 145.0 },
+    { 155.0, 110.0, 135.0, 130.0 },
+    { 145.0, 120.0, 115.0, 140.0 },
+    { 135.0, 140.0,  85.0, 130.0 },
+
+    {  95.0,  65.0, 165.0, 165.0 },
+    { 100.0,  90.0, 120.0, 165.0 },
+    { 100.0, 120.0,  80.0, 165.0 },
+    { 130.0,  90.0, 120.0, 180.0 },
+    { 120.0, 110.0,  95.0, 180.0 },
+    { 120.0, 110.0,  95.0, 150.0 },
+    { 155.0,  85.0, 125.0, 155.0 },
+    { 140.0,  90.0, 120.0, 150.0 },
+    { 125.0, 120.0,  90.0, 130.0 },
+    
+    { 105.0,  60.0, 125.0, 180.0 },
+    { 105.0,  80.0, 110.0, 165.0 },
+    { 105.0, 100.0,  85.0, 155.0 },
+    { 125.0,  65.0, 120.0, 180.0 },
+    { 125.0,  80.0, 115.0, 170.0 },
+    { 120.0, 105.0,  85.0, 155.0 },
+    { 155.0,  70.0, 125.0, 165.0 },
+    { 135.0, 100.0,  80.0, 180.0 },
+    { 125.0, 120.0,  55.0, 155.0 },
+};
 
 void connectCallback(const redisAsyncContext *c, int status);
 void disconnectCallback(const redisAsyncContext *c, int status);
@@ -96,6 +129,7 @@ void setAngle (servo_context_t& ctx, int angle, uint8_t speed);
 void publish (redisContext* ctx, char* buffer);
 void servoMsgFactory (char* buffer, int id, int angle);
 uint8_t calculateAngles (arm_context_t& ctx);
+uint8_t findAnglesMap (arm_context_t& ctx);
 
 arm_context_t    robe;
 servo_context_t  servoCtxList[4];
@@ -117,9 +151,9 @@ main (int argc, char **argv) {
     }
 
     robe.z_offset   = 5;
-    robe.coxa       = 4;
-    robe.fermur     = 5;
-    robe.tibia      = 1.5;
+    robe.coxa       = 5.5;
+    robe.fermur     = 5.5;
+    robe.tibia      = 8;
 
     mraa_init();
 	fprintf(stdout, "MRAA Version: %s\n", mraa_get_version());
@@ -133,11 +167,15 @@ main (int argc, char **argv) {
     servoCtxList[WHRIST].pwmCtx         = mraa_pwm_init (PWM_WHRIST);
     servoCtxList[WHRIST].currentAngle   = 170;
 
+    mraa_pwm_period_us (servoCtxList[BASE].pwmCtx,     PERIOD_WIDTH);
+	mraa_pwm_period_us (servoCtxList[SHOULDER].pwmCtx, PERIOD_WIDTH);
+    mraa_pwm_period_us (servoCtxList[ELBOW].pwmCtx,    PERIOD_WIDTH);
+    mraa_pwm_period_us (servoCtxList[WHRIST].pwmCtx,   PERIOD_WIDTH);
     
     mraa_pwm_enable (servoCtxList[BASE].pwmCtx,     ENABLE);
 	mraa_pwm_enable (servoCtxList[SHOULDER].pwmCtx, ENABLE);
     mraa_pwm_enable (servoCtxList[ELBOW].pwmCtx,    ENABLE);
-    mraa_pwm_enable (servoCtxList[WHRIST].pwmCtx,    ENABLE);
+    mraa_pwm_enable (servoCtxList[WHRIST].pwmCtx,   ENABLE);
     
     printf("Starting the listener... [SUCCESS]\n");
 
@@ -171,13 +209,13 @@ void subCallback(redisAsyncContext *c, void *r, void *priv) {
                 int handlerId	= root.get("handler", 0).asInt();
                 switch (handlerId) {
                     case COORDINATE: {
-                        int coordinateX	= root.get("x", 0).asInt();
-                        int coordinateY	= root.get("y", 0).asInt();
-                        int coordinateZ	= root.get("z", 0).asInt();
-                        int coordinateP	= root.get("p", 0).asInt();
+                        float coordinateX	= root.get("x", 0).asFloat();
+                        float coordinateY	= root.get("y", 0).asFloat();
+                        float coordinateZ	= root.get("z", 0).asFloat();
+                        float coordinateP	= root.get("p", 0).asFloat();
                         std::cout  	<< "COORDINATE ("
 							<< coordinateX << "," << coordinateY << "," 
-                            << coordinateZ << "," << coordinateP << ")\n";
+                            << coordinateZ << "," << coordinateP << ") ";
 
                         robe.coord.x = coordinateX;
                         robe.coord.y = coordinateY;
@@ -185,10 +223,25 @@ void subCallback(redisAsyncContext *c, void *r, void *priv) {
                         robe.coord.p = coordinateP;
 
                         // TODO - Inverse Kinematics
-                        if (calculateAngles (robe)) {
-                            std::cout   << "ANGLES ("
-                            << robe.angles.tn << "," << robe.angles.j1 << "," 
-                            << robe.angles.j2 << "," << robe.angles.j3 << ")\n";
+                        if (findAnglesMap (robe)) {
+                            // std::cout   << "ANGLES ("
+                            // << robe.angles.tn << ", " << robe.angles.j1 << ", " 
+                            // << robe.angles.j2 << ", " << robe.angles.j3 << ")";
+
+                            // angles fix
+                            // robe.angles.tn += 90;
+                            // robe.angles.j1 = 180 - abs(robe.angles.j1);
+                            // robe.angles.j2 = (abs(robe.angles.j2) + 90);
+                            // robe.angles.j3 = (abs(robe.angles.j3) + 90);
+
+                            std::cout   << "("
+                            << robe.angles.tn << ", " << robe.angles.j1 << ", " 
+                            << robe.angles.j2 << ", " << robe.angles.j3 << ")\n\n";
+
+                            setAngle (servoCtxList[BASE],     robe.angles_ptr->tn, SERVO_SPEED_LOW);
+                            setAngle (servoCtxList[SHOULDER], robe.angles_ptr->j1, SERVO_SPEED_LOW);
+                            setAngle (servoCtxList[ELBOW],    robe.angles_ptr->j2, SERVO_SPEED_LOW);
+                            setAngle (servoCtxList[WHRIST],   robe.angles_ptr->j3, SERVO_SPEED_LOW);
                         }
                     }
                     break;
@@ -284,7 +337,7 @@ publish (redisContext* ctx, char* buffer) {
 
     sprintf (message, "PUBLISH MODULE-INFO %s", buffer);
     reply = (redisReply *)redisCommand (ctx, message);
-    printf ("ERROR %d", reply->type);
+    // printf ("ERROR %d", reply->type);
     freeReplyObject(reply);
 
     printf ("%s\n", message);
@@ -296,6 +349,15 @@ servoMsgFactory (char* buffer, int id, int angle) {
 }
 
 uint8_t
+findAnglesMap (arm_context_t& ctx) {
+    int index = ((ctx.coord.z - 1) * 9) + ((ctx.coord.y - 1) * 3) + ctx.coord.x - 1;
+    printf ("index = %d\n", index);
+    ctx.angles_ptr = (arm_angles_t*) &angleMap[index];
+    
+    return YES;
+}
+
+uint8_t
 calculateAngles (arm_context_t& ctx) {
     float a0, a1, a2, a3, a12, aG;
     float wT, w1, w2, z1, z2, l12;
@@ -303,13 +365,43 @@ calculateAngles (arm_context_t& ctx) {
     a0 = atan(ctx.coord.y / ctx.coord.x);
     wT = sqrt(ctx.coord.x*ctx.coord.x + ctx.coord.y*ctx.coord.y);
     
-    aG = 0;
+    aG = -0.785398163;
+    w2 = wT;
+    z2 = ctx.coord.z;
+    
+    l12 = sqrt((w2*w2) + (z2*z2));
+    a12 = atan (z2/w2);
+    
+    std::cout   << "L12 (" << l12 << ") ";
+    /*if (l12 > ctx.coxa + ctx.fermur) {
+        return NO;
+    }*/
+    
+    a1 = acos(((ctx.coxa*ctx.coxa) + (l12*l12) - (ctx.fermur*ctx.fermur)) / (2 * ctx.coxa * l12 )) + a12;
+    
+    w1 = ctx.coxa * cos(a1);
+    z1 = ctx.coxa * sin(a1);
+    a2 = atan ((z2 - z1) / (w2 - w1)) - a1;
+    a3 = aG - a1 - a2;
+    
+    ctx.angles.tn = a0 * 180 / 3.14;
+    ctx.angles.j1 = a1 * 180 / 3.14;
+    ctx.angles.j2 = a2 * 180 / 3.14;
+
+    /*float a0, a1, a2, a3, a12, aG;
+    float wT, w1, w2, z1, z2, l12;
+    
+    a0 = atan(ctx.coord.y / ctx.coord.x);
+    wT = sqrt(ctx.coord.x*ctx.coord.x + ctx.coord.y*ctx.coord.y);
+    
+    aG = -0.785398163;
     w2 = wT - ctx.tibia * cos(aG);
     z2 = ctx.coord.z - ctx.tibia * sin(aG);
     
     l12 = sqrt((w2*w2) + (z2*z2));
     a12 = atan (z2/w2);
     
+    std::cout   << "L12 (" << l12 << ") ";
     if (l12 > ctx.coxa + ctx.fermur) {
         return NO;
     }
@@ -324,7 +416,7 @@ calculateAngles (arm_context_t& ctx) {
     ctx.angles.tn = a0 * 180 / 3.14;
     ctx.angles.j1 = a1 * 180 / 3.14;
     ctx.angles.j2 = a2 * 180 / 3.14;
-    ctx.angles.j3 = a3 * 180 / 3.14;
+    ctx.angles.j3 = a3 * 180 / 3.14;*/
 
     /*float xt    = ctx.coord.x;
     float l     = sqrt (ctx.coord.x*ctx.coord.x + ctx.coord.y*ctx.coord.y);

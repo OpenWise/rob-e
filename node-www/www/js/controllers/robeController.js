@@ -25,7 +25,7 @@ angular.module('app').controller('robeController', function($scope, robeFactory,
 		xLane: 100,
 		yLane: 60,
         minBorder: 40,
-        maxBorder: 100,
+        maxBorder: 180,
     }
     
     $scope.servoElbow = {

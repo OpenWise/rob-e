@@ -63,6 +63,24 @@ apiRouter.route('/set_servo_angle/:id/:angle').get(function(req, res) {
     res.end('OK');
 });
 
+apiRouter.route('/set_position_debug/').get(function(req, res) {
+    for (iterX = 1; iterX < 12; iterX+=1) { 
+        var data = '{"handler":1,"x":' + iterX + 
+                               ',"y":0' + 
+                               ',"z":1' +
+                               ',"p":1}';
+        redis.Publish("ROBE-IN", data, function(err, info) {
+            if (err) {
+                console.error("ERROR");
+                res.status(500).send(err.message);
+            } else {
+                console.error("GOOD");
+            }
+        });
+    }
+
+    res.end('OK');
+});
 
 var msgID = 0;
 
