@@ -1,20 +1,20 @@
 <div class="pure-u-1-1 pure-u-md-1-2 pure-u-lg-1-4" style="position:relative; left:{{data.xLane}}px; top:{{data.yLane}}px;">
     <div class="pure-g servo-container">
-		<div class="pure-u-1-1" style="text-align:center;">
+		<div class="pure-u-1-1" style="text-align:center;font-size:25px">
 			{{data.name}}
 		</div>
 		<div class="servo-data">
         <div class="pure-u-1-5" style="text-align:center;">
 			<button class="pure-button servo-direction" ng-click="onMinusClick(data)">
-				<i class="fa fa-2x fa-minus-square"></i>
+				<i class="fa fa-4x fa-minus-square"></i>
 			</button>
         </div>
-        <div class="servo-value pure-u-3-5">
+        <div class="servo-value pure-u-3-5" style="font-size:25px">
             {{data.angle}}
         </div>
         <div class="pure-u-1-5" style="text-align:center;">
 			<button class="pure-button servo-direction" ng-click="onPlusClick(data)">
-				<i class="fa fa-2x fa-plus-square"></i>
+				<i class="fa fa-4x fa-plus-square"></i>
 			</button>
         </div>
 		</div>

@@ -91,15 +91,15 @@ typedef struct {
 } arm_context_t;
 
 arm_angles_t angleMap[] = {
-    {  95.0, 100.0, 165.0, 135.0 },
-    { 100.0, 110.0, 140.0, 135.0 },
-    { 105.0, 125.0, 105.0, 135.0 },
-    { 130.0,  95.0, 165.0, 135.0 },
-    { 125.0, 110.0, 130.0, 135.0 },
-    { 120.0, 135.0,  85.0, 145.0 },
-    { 155.0, 110.0, 135.0, 130.0 },
-    { 145.0, 120.0, 115.0, 140.0 },
-    { 135.0, 140.0,  85.0, 130.0 },
+    {  95.0, 105.0, 170.0, 140.0 },
+    { 100.0, 120.0, 150.0, 145.0 },
+    { 105.0, 135.0, 115.0, 145.0 },
+    { 130.0, 105.0, 175.0, 135.0 },
+    { 120.0, 120.0, 140.0, 145.0 },
+    { 120.0, 140.0, 105.0, 140.0 },
+    { 155.0, 120.0, 140.0, 150.0 },
+    { 140.0, 130.0, 120.0, 150.0 },
+    { 125.0, 140.0, 105.0, 125.0 },
 
     {  95.0,  65.0, 165.0, 165.0 },
     { 100.0,  90.0, 120.0, 165.0 },
@@ -120,6 +120,36 @@ arm_angles_t angleMap[] = {
     { 155.0,  70.0, 125.0, 165.0 },
     { 135.0, 100.0,  80.0, 180.0 },
     { 125.0, 120.0,  55.0, 155.0 },
+    
+    {  95.0,   45.0, 135.0, 160.0 },
+    {  95.0,   55.0, 125.0, 150.0 },
+    {  95.0,   85.0, 115.0, 130.0 },
+    { 125.0,   50.0, 115.0, 180.0 },
+    { 120.0,   65.0, 115.0, 155.0 },
+    { 115.0,   90.0,  85.0, 150.0 },
+    { 155.0,   55.0, 120.0, 155.0 },
+    { 140.0,   70.0, 120.0, 140.0 },
+    { 125.0,  100.0,  75.0, 140.0 },
+    
+    {  95.0,   50.0, 120.0, 130.0 },
+    {  95.0,   65.0, 115.0, 120.0 },
+    {  95.0,   90.0,  90.0,  95.0 },
+    { 125.0,   55.0, 105.0, 145.0 },
+    { 120.0,   70.0, 115.0, 120.0 },
+    { 115.0,   85.0, 115.0,  80.0 },
+    { 155.0,   65.0,  90.0, 145.0 },
+    { 140.0,   75.0, 100.0, 115.0 },
+    { 130.0,   90.0, 100.0,  75.0 },
+    
+    {  95.0,   65.0, 105.0,  85.0 },
+    {  95.0,   80.0,  95.0, 110.0 },
+    {   0.0,    0.0,   0.0,   0.0 },
+    { 125.0,   65.0, 105.0,  95.0 },
+    { 120.0,   85.0,  90.0,  90.0 },
+    {   0.0,    0.0,   0.0,   0.0 },
+    { 155.0,   75.0,  90.0, 100.0 },
+    { 145.0,   85.0,  90.0,  90.0 },
+    {   0.0,    0.0,   0.0,   0.0 },
 };
 
 void connectCallback(const redisAsyncContext *c, int status);
@@ -215,7 +245,7 @@ void subCallback(redisAsyncContext *c, void *r, void *priv) {
                         float coordinateP	= root.get("p", 0).asFloat();
                         std::cout  	<< "COORDINATE ("
 							<< coordinateX << "," << coordinateY << "," 
-                            << coordinateZ << "," << coordinateP << ") ";
+                            << coordinateZ << "," << coordinateP << ")\n";
 
                         robe.coord.x = coordinateX;
                         robe.coord.y = coordinateY;
@@ -234,14 +264,20 @@ void subCallback(redisAsyncContext *c, void *r, void *priv) {
                             // robe.angles.j2 = (abs(robe.angles.j2) + 90);
                             // robe.angles.j3 = (abs(robe.angles.j3) + 90);
 
-                            std::cout   << "("
-                            << robe.angles.tn << ", " << robe.angles.j1 << ", " 
-                            << robe.angles.j2 << ", " << robe.angles.j3 << ")\n\n";
-
                             setAngle (servoCtxList[BASE],     robe.angles_ptr->tn, SERVO_SPEED_LOW);
                             setAngle (servoCtxList[SHOULDER], robe.angles_ptr->j1, SERVO_SPEED_LOW);
                             setAngle (servoCtxList[ELBOW],    robe.angles_ptr->j2, SERVO_SPEED_LOW);
                             setAngle (servoCtxList[WHRIST],   robe.angles_ptr->j3, SERVO_SPEED_LOW);
+                            
+                            char msg[128];
+                            servoMsgFactory (msg, 1, robe.angles_ptr->tn);
+                            publish (redisCtx, msg);
+                            servoMsgFactory (msg, 2, robe.angles_ptr->j1);
+                            publish (redisCtx, msg);
+                            servoMsgFactory (msg, 3, robe.angles_ptr->j2);
+                            publish (redisCtx, msg);
+                            servoMsgFactory (msg, 4, robe.angles_ptr->j3);
+                            publish (redisCtx, msg);
                         }
                     }
                     break;
@@ -304,10 +340,25 @@ void
 setAngle (servo_context_t& ctx, int angle, uint8_t speed) {
 	float notches = ((float)(MAX_PULSE_WIDTH - MIN_PULSE_WIDTH) / 180);
     int16_t width = notches * (float) angle + MIN_PULSE_WIDTH;
+    uint16_t prevWidth = notches * (float) ctx.currentAngle + MIN_PULSE_WIDTH;
 
     switch (speed) {
-        case SERVO_SPEED_LOW:
-            mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
+        case SERVO_SPEED_LOW: {
+            // mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
+            
+            int delta = abs(width - prevWidth);
+            int move = delta / 10;
+            int direction = (width - prevWidth > 0) ? 1 : -1;
+            
+            width = prevWidth;
+            for (int i = 0; i < move; i++) {
+                width += (direction * 10);
+                mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
+                usleep (5000);
+            }
+            
+            ctx.currentAngle = angle;
+        }
         break;
         case SERVO_SPEED_MIDDLE:
             mraa_pwm_pulsewidth_us (ctx.pwmCtx, width);
@@ -337,7 +388,6 @@ publish (redisContext* ctx, char* buffer) {
 
     sprintf (message, "PUBLISH MODULE-INFO %s", buffer);
     reply = (redisReply *)redisCommand (ctx, message);
-    // printf ("ERROR %d", reply->type);
     freeReplyObject(reply);
 
     printf ("%s\n", message);
@@ -351,8 +401,11 @@ servoMsgFactory (char* buffer, int id, int angle) {
 uint8_t
 findAnglesMap (arm_context_t& ctx) {
     int index = ((ctx.coord.z - 1) * 9) + ((ctx.coord.y - 1) * 3) + ctx.coord.x - 1;
-    printf ("index = %d\n", index);
     ctx.angles_ptr = (arm_angles_t*) &angleMap[index];
+    
+    if (ctx.angles_ptr->tn + ctx.angles_ptr->j1 + ctx.angles_ptr->j2 + ctx.angles_ptr->j3 == 0) {
+        return NO;
+    }
     
     return YES;
 }

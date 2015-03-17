@@ -51,37 +51,55 @@ main () {
     }
 
     mraa_pwm_period_us (pwmBase,    PERIOD_WIDTH);
-	mraa_pwm_period_us (pwmSholder, PERIOD_WIDTH);
-    mraa_pwm_period_us (pwmElbow,   PERIOD_WIDTH);
+	//mraa_pwm_period_us (pwmSholder, PERIOD_WIDTH);
+    //mraa_pwm_period_us (pwmElbow,   PERIOD_WIDTH);
 	
 	mraa_pwm_enable (pwmBase,    ENABLE);
-	mraa_pwm_enable (pwmSholder, ENABLE);
-    mraa_pwm_enable (pwmElbow,   ENABLE);
+	//mraa_pwm_enable (pwmSholder, ENABLE);
+    //mraa_pwm_enable (pwmElbow,   ENABLE);
 
 	signal (SIGINT, sigHandler);
 
     while (isWorking == TRUE) {
         printf ("# Angle -> 0\n");
         setAngle (pwmBase,      0);
-    	setAngle (pwmSholder,   80);
-        setAngle (pwmElbow,     30);
+    	// setAngle (pwmSholder,   80);
+        // setAngle (pwmElbow,     30);
     	usleep (2000000);
 
         printf ("# Angle -> 180\n");
     	setAngle (pwmBase,      180);
-    	setAngle (pwmSholder,   120);
-        setAngle (pwmElbow,     100);
+    	// setAngle (pwmSholder,   120);
+        // setAngle (pwmElbow,     100);
     	usleep (2000000);
     }
 
     return 0;
 }
 
+uint16_t prevAngle = 0;
+
 void
 setAngle (mraa_pwm_context pwm, uint16_t angle) {
 	float notches = ((float)(MAX_PULSE_WIDTH - MIN_PULSE_WIDTH) / 180);
 	uint16_t width = notches * (float) angle + MIN_PULSE_WIDTH;
+    uint16_t prevWidth = notches * (float) prevAngle + MIN_PULSE_WIDTH;
 
-	mraa_pwm_pulsewidth_us (pwm, width);
+    int delta = abs(width - prevWidth);
+    int move = delta / 10;
+    int direction = (width - prevWidth > 0) ? 1 : -1;
+    int i;
+    
+    width = prevWidth;
+    for (i = 0; i < move; i++) {
+        width += (direction * 10);
+        mraa_pwm_pulsewidth_us (pwm, width);
+        usleep (5000);
+    }
+    
+    prevAngle = angle;
+    
+    
+	// mraa_pwm_pulsewidth_us (pwm, width);
 }
 

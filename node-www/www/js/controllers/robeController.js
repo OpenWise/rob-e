@@ -47,6 +47,16 @@ angular.module('app').controller('robeController', function($scope, robeFactory,
         minBorder: 0,
         maxBorder: 180,
     }
+    
+    $scope.robeCoordinate = {
+        id: 5,
+        xLane: 450,
+        yLane: -150,
+        X: 1,
+        Y: 1,
+        Z: 2,
+        P: 1,
+    }
 
     var eventBaseSourceCallback = function() {
         return function (event) {
@@ -96,7 +106,6 @@ angular.module('app').controller('robeController', function($scope, robeFactory,
                 id: servo.id,
                 angle: newAngle
             });
-            // rotateServo($http, servo.id, servo.angle);
         }
     }
 	
@@ -107,17 +116,11 @@ angular.module('app').controller('robeController', function($scope, robeFactory,
                 id: servo.id,
                 angle: newAngle
             });
-            // rotateServo($http, servo.id, servo.angle);
         }
     }
 
-    $scope.setPosistion = function(x,y,z,p) {
-        
-    }
-    
-    // NOTE - Not for production, only for tests
-    var rotateServo = function ($http, servoId, angle) {
-        $http.get(serverService.server + 'api/set_servo_angle/' + servoId + '/' + angle).
+    $scope.setPositionClick = function(coor) {
+        $http.get(serverService.server + 'api/set_position/' + coor.X + '/' + coor.Y + "/" + coor.Z + "/" + coor.P).
         success(function(data, status, headers, config) {}).
         error(function(data, status, headers, config) {});
     }

@@ -17,14 +17,6 @@ angular.module('app').factory('robeFactory', function($resource, robeService, se
                     return response.data;
                 }
             }
-        },
-        setArmPosition: {
-            method: "GET",
-            interceptor: {
-                response: function(response) {
-                    return response.data;
-                }
-            }
         }
     });
 });
